@@ -11,7 +11,7 @@
 #define CLEAR_SCREEN "clear"
 #endif
 
-// --- Macros ---
+// --- Macros & Colors ---
 #define RESET "\033[0m"
 #define RED "\033[1;31m"
 #define GREEN "\033[1;32m"
@@ -19,10 +19,12 @@
 #define BLUE "\033[1;34m"
 #define MAGENTA "\033[1;35m"
 #define CYAN "\033[1;36m"
+#define WHITE "\033[1;37m"
 
-// --- ROBUST INPUT HANDLING (THE FIX) ---
+// ==========================================
+//      ROBUST INPUT HANDLING
+// ==========================================
 
-// Function to clear leftover characters (like commas) from the input stream
 void clearBuffer()
 {
     int c;
@@ -30,7 +32,6 @@ void clearBuffer()
         ;
 }
 
-// Function to safely get an integer, ignoring commas/garbage
 int getSafeInt()
 {
     int value;
@@ -39,28 +40,21 @@ int getSafeInt()
 
     while (1)
     {
-        // We try to read an integer
         status = scanf("%d", &value);
 
         if (status == 1)
         {
-            // Check what comes immediately after the number
             after = getchar();
-
-            // If it's a newline (Enter) or a space, we are good.
             if (after == '\n' || after == ' ' || after == '\t')
             {
                 return value;
             }
-            // If it's a comma, we just ignore it and return the value
             else if (after == ',')
             {
                 return value;
             }
-            // If it's something else (like 10abc), we might want to clear the rest
             else
             {
-                // If it was just a separator, continue, otherwise clear line
                 if (after != '\n')
                     clearBuffer();
                 return value;
@@ -68,47 +62,23 @@ int getSafeInt()
         }
         else
         {
-            // Input failure (e.g., user typed "abc")
             printf(RED "  Invalid input! Please enter a number: " RESET);
-            clearBuffer(); // Clear the bad input and try again
+            clearBuffer();
         }
     }
 }
 
-// --- Data Structures ---
-
-typedef struct
+void waitForInput()
 {
-    int id;
-    int bt, at, pr, rem_bt, ct, tat, wt;
-} Process;
-
-typedef struct
-{
-    int pid;
-    int startTime;
-    int endTime;
-} GanttSegment;
-
-GanttSegment history[1000];
-int historyIndex = 0;
-
-// --- Helper Functions ---
-
-void addToHistory(int pid, int start, int end)
-{
-    if (historyIndex > 0 && history[historyIndex - 1].pid == pid)
-    {
-        history[historyIndex - 1].endTime = end;
-    }
-    else
-    {
-        history[historyIndex].pid = pid;
-        history[historyIndex].startTime = start;
-        history[historyIndex].endTime = end;
-        historyIndex++;
-    }
+    printf(YELLOW "\n[Press ENTER to continue...]" RESET);
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF)
+        ;
 }
+
+// ==========================================
+//      VISUALIZATION HELPERS
+// ==========================================
 
 void printLine(int width)
 {
@@ -138,16 +108,40 @@ int countDigits(int n)
     return count;
 }
 
-void waitForInput()
-{
-    printf(YELLOW "\n[Press ENTER to step to next second...]" RESET);
-    // Use a simple getchar loop until newline is found
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF)
-        ;
-}
+// ==========================================
+//      MODULE 1: CPU SCHEDULING
+// ==========================================
 
-// --- VISUALIZATION MODULES ---
+typedef struct
+{
+    int id;
+    int bt, at, pr, rem_bt, ct, tat, wt;
+} Process;
+
+typedef struct
+{
+    int pid;
+    int startTime;
+    int endTime;
+} GanttSegment;
+
+GanttSegment history[1000];
+int historyIndex = 0;
+
+void addToHistory(int pid, int start, int end)
+{
+    if (historyIndex > 0 && history[historyIndex - 1].pid == pid)
+    {
+        history[historyIndex - 1].endTime = end;
+    }
+    else
+    {
+        history[historyIndex].pid = pid;
+        history[historyIndex].startTime = start;
+        history[historyIndex].endTime = end;
+        historyIndex++;
+    }
+}
 
 void printGanttChart()
 {
@@ -236,8 +230,6 @@ void displaySchedulingTable(Process p[], int n)
     printf("Average Turnaround Time: %.2f\n" RESET, avg_tat / (float)n);
     printGanttChart();
 }
-
-// --- ALGORITHMS ---
 
 void calculateMetrics(Process p[], int n)
 {
@@ -397,20 +389,19 @@ void runRoundRobin(Process p[], int n, int quantum)
     displaySchedulingTable(p, n);
 }
 
-// --- INTERACTIVE TEACHING MODE ---
-
+// --- Interactive Mode for CPU ---
 void printDashboard(int time, int runningID, Process p[], int n, char *explanation)
 {
     system(CLEAR_SCREEN);
     printHeader("INTERACTIVE TEACHING MODE");
     printf(CYAN " Current Time: " RESET "%d\n\n", time);
 
-    printf("  +-------+       \n");
+    printf("  +-------+        \n");
     if (runningID != -1)
         printf("  |  P%d   | <--- " GREEN "RUNNING" RESET "\n", runningID);
     else
         printf("  | IDLE  | <--- " RED "IDLE" RESET "\n");
-    printf("  +-------+       \n\n");
+    printf("  +-------+        \n\n");
 
     printf("  " YELLOW "Ready Queue: " RESET "[ ");
     bool anyReady = false;
@@ -438,7 +429,7 @@ void runInteractiveSRTF(Process p[], int n)
     char explanation[256];
 
     printf(GREEN "\nStarting Interactive Simulation... (Maximize window)\n" RESET);
-    waitForInput(); // Using fixed waitForInput
+    waitForInput();
 
     while (completed != n)
     {
@@ -492,84 +483,9 @@ void runInteractiveSRTF(Process p[], int n)
     displaySchedulingTable(p, n);
 }
 
-// --- BANKER'S ALGORITHM ---
-
-void runBankersAlgorithm()
-{
-    int n, m;
-    printHeader("BANKER'S ALGORITHM");
-    printf("Enter number of processes: ");
-    n = getSafeInt();
-    printf("Enter number of resource types: ");
-    m = getSafeInt();
-
-    int alloc[n][m], max[n][m], avail[m], need[n][m], safeSeq[n];
-    int work[m];
-    bool finish[n];
-
-    printf("\nEnter Allocation Matrix:\n");
-    for (int i = 0; i < n; i++)
-    {
-        printf("P%d: ", i);
-        for (int j = 0; j < m; j++)
-            alloc[i][j] = getSafeInt();
-    }
-
-    printf("\nEnter Max Matrix:\n");
-    for (int i = 0; i < n; i++)
-    {
-        printf("P%d: ", i);
-        for (int j = 0; j < m; j++)
-        {
-            max[i][j] = getSafeInt();
-            need[i][j] = max[i][j] - alloc[i][j];
-        }
-    }
-
-    printf("\nEnter Available Resources: ");
-    for (int i = 0; i < m; i++)
-    {
-        avail[i] = getSafeInt();
-        work[i] = avail[i];
-    }
-
-    for (int i = 0; i < n; i++)
-        finish[i] = false;
-    int count = 0;
-    while (count < n)
-    {
-        bool found = false;
-        for (int p = 0; p < n; p++)
-        {
-            if (!finish[p])
-            {
-                int j;
-                for (j = 0; j < m; j++)
-                    if (need[p][j] > work[j])
-                        break;
-                if (j == m)
-                {
-                    for (int k = 0; k < m; k++)
-                        work[k] += alloc[p][k];
-                    safeSeq[count++] = p;
-                    finish[p] = true;
-                    found = true;
-                }
-            }
-        }
-        if (!found)
-        {
-            printf(RED "\nSystem is in an UNSAFE state! (Deadlock Risk)\n" RESET);
-            return;
-        }
-    }
-    printf(GREEN "\nSystem is in a SAFE state.\nSafe Sequence: " RESET);
-    for (int i = 0; i < n; i++)
-        printf("P%d%s", safeSeq[i], (i == n - 1) ? "" : " -> ");
-    printf("\n");
-}
-
-// --- MEMORY ALLOCATION ---
+// ==========================================
+//      MODULE 2: MEMORY ALLOCATION
+// ==========================================
 
 void displayMemoryAnalysis(int processes, int processSize[], int allocation[], int blockSize[])
 {
@@ -663,7 +579,424 @@ void runMemoryAllocation()
     }
 }
 
-// --- MAIN MENU ---
+// ==========================================
+//      MODULE 3: BANKER'S ALGORITHM
+// ==========================================
+
+void runBankersAlgorithm()
+{
+    int n, m;
+    printHeader("BANKER'S ALGORITHM");
+    printf("Enter number of processes: ");
+    n = getSafeInt();
+    printf("Enter number of resource types: ");
+    m = getSafeInt();
+
+    int alloc[n][m], max[n][m], avail[m], need[n][m], safeSeq[n];
+    int work[m];
+    bool finish[n];
+
+    printf("\nEnter Allocation Matrix:\n");
+    for (int i = 0; i < n; i++)
+    {
+        printf("P%d: ", i);
+        for (int j = 0; j < m; j++)
+            alloc[i][j] = getSafeInt();
+    }
+
+    printf("\nEnter Max Matrix:\n");
+    for (int i = 0; i < n; i++)
+    {
+        printf("P%d: ", i);
+        for (int j = 0; j < m; j++)
+        {
+            max[i][j] = getSafeInt();
+            need[i][j] = max[i][j] - alloc[i][j];
+        }
+    }
+
+    printf("\nEnter Available Resources: ");
+    for (int i = 0; i < m; i++)
+    {
+        avail[i] = getSafeInt();
+        work[i] = avail[i];
+    }
+
+    for (int i = 0; i < n; i++)
+        finish[i] = false;
+    int count = 0;
+    while (count < n)
+    {
+        bool found = false;
+        for (int p = 0; p < n; p++)
+        {
+            if (!finish[p])
+            {
+                int j;
+                for (j = 0; j < m; j++)
+                    if (need[p][j] > work[j])
+                        break;
+                if (j == m)
+                {
+                    for (int k = 0; k < m; k++)
+                        work[k] += alloc[p][k];
+                    safeSeq[count++] = p;
+                    finish[p] = true;
+                    found = true;
+                }
+            }
+        }
+        if (!found)
+        {
+            printf(RED "\nSystem is in an UNSAFE state! (Deadlock Risk)\n" RESET);
+            return;
+        }
+    }
+    printf(GREEN "\nSystem is in a SAFE state.\nSafe Sequence: " RESET);
+    for (int i = 0; i < n; i++)
+        printf("P%d%s", safeSeq[i], (i == n - 1) ? "" : " -> ");
+    printf("\n");
+}
+
+// ==========================================
+//      MODULE 4: READER-WRITER PROBLEM
+// ==========================================
+
+void displayRWState(int readers, int writer_active, int mutex, int wrt_sem)
+{
+    system(CLEAR_SCREEN);
+    printHeader("READER - WRITER PROBLEM");
+    printf(YELLOW "This simulation uses 'Reader Preference' logic.\n" RESET);
+
+    printf("\n" WHITE "   [ SEMAPHORES STATUS ]\n" RESET);
+    printf("   Mutex (protects reader count) : %s\n", mutex == 1 ? GREEN "UNLOCKED (1)" RESET : RED "LOCKED (0)" RESET);
+    printf("   Wrt (protects shared file)    : %s\n", wrt_sem == 1 ? GREEN "UNLOCKED (1)" RESET : RED "LOCKED (0)" RESET);
+
+    printf("\n" WHITE "   [ CURRENT ACTIVITY ]\n" RESET);
+    printf("   Active Readers: " CYAN "%d" RESET "\n", readers);
+    printf("   Writer Status : %s\n", writer_active ? RED "WRITING INSIDE CRITICAL SECTION" RESET : GREEN "IDLE" RESET);
+
+    printf("\n" WHITE "   [ VISUALIZATION ]\n" RESET);
+    printf("   File/Resource: [ ");
+    if (writer_active)
+        printf(RED "WRITER WRITING" RESET);
+    else if (readers > 0)
+    {
+        for (int i = 0; i < readers; i++)
+            printf(CYAN "R " RESET);
+    }
+    else
+    {
+        printf(GREEN "EMPTY" RESET);
+    }
+    printf(" ]\n");
+    printLine(60);
+}
+
+void runReaderWriter()
+{
+    int read_count = 0;
+    int mutex = 1;
+    int wrt = 1;
+
+    int choice;
+    char msg[256] = "System Ready.";
+
+    while (1)
+    {
+        displayRWState(read_count, (wrt == 0 && read_count == 0), mutex, wrt);
+        printf(MAGENTA "LOG: " RESET "%s\n", msg);
+        printf("\n" BLUE "Actions:" RESET "\n");
+        printf("1. New Reader Tries to Enter\n");
+        printf("2. Active Reader Leaves\n");
+        printf("3. Writer Tries to Enter\n");
+        printf("4. Active Writer Leaves\n");
+        printf("5. Back to Main Menu\n");
+        printf("Selection: ");
+        choice = getSafeInt();
+
+        if (choice == 5)
+            break;
+        strcpy(msg, "");
+
+        switch (choice)
+        {
+        case 1:
+            if (wrt == 0 && read_count == 0)
+            {
+                sprintf(msg, RED "BLOCKED:" RESET " Reader cannot enter. Writer holds 'wrt' semaphore.");
+            }
+            else
+            {
+                mutex = 0;
+                read_count++;
+                if (read_count == 1)
+                {
+                    wrt = 0;
+                    sprintf(msg, GREEN "SUCCESS:" RESET " First Reader entered. 'wrt' semaphore LOCKED.");
+                }
+                else
+                {
+                    sprintf(msg, GREEN "SUCCESS:" RESET " Reader %d entered. Shared lock held.", read_count);
+                }
+                mutex = 1;
+            }
+            break;
+
+        case 2:
+            if (read_count == 0)
+            {
+                sprintf(msg, YELLOW "WARNING:" RESET " No readers are currently inside.");
+            }
+            else
+            {
+                mutex = 0;
+                read_count--;
+                if (read_count == 0)
+                {
+                    wrt = 1;
+                    sprintf(msg, GREEN "LEFT:" RESET " Last Reader left. 'wrt' semaphore UNLOCKED.");
+                }
+                else
+                {
+                    sprintf(msg, GREEN "LEFT:" RESET " Reader left. %d remain.", read_count);
+                }
+                mutex = 1;
+            }
+            break;
+
+        case 3:
+            if (wrt == 0)
+            {
+                if (read_count > 0)
+                    sprintf(msg, RED "BLOCKED:" RESET " Writer cannot enter. Readers hold the lock.");
+                else
+                    sprintf(msg, RED "BLOCKED:" RESET " Writer cannot enter. Another Writer is active.");
+            }
+            else
+            {
+                wrt = 0;
+                sprintf(msg, GREEN "SUCCESS:" RESET " Writer Entered. 'wrt' LOCKED.");
+            }
+            break;
+
+        case 4:
+            if (wrt == 1)
+            {
+                sprintf(msg, YELLOW "WARNING:" RESET " No writer is currently writing.");
+            }
+            else if (read_count > 0)
+            {
+                sprintf(msg, RED "ERROR:" RESET " Invalid State (Readers present while WRT held).");
+            }
+            else
+            {
+                wrt = 1;
+                sprintf(msg, GREEN "LEFT:" RESET " Writer left. 'wrt' semaphore RELEASED.");
+            }
+            break;
+        default:
+            sprintf(msg, "Invalid Selection.");
+        }
+    }
+}
+
+// ==========================================
+//      MODULE 5: DINING PHILOSOPHERS
+// ==========================================
+
+#define THINKING 0
+#define HUNGRY 1
+#define EATING 2
+
+int chopstick[5];
+int p_state[5];
+int held_sticks[5];
+
+void initDining()
+{
+    for (int i = 0; i < 5; i++)
+    {
+        chopstick[i] = 1;
+        p_state[i] = THINKING;
+        held_sticks[i] = 0;
+    }
+}
+
+void displayDiningTable()
+{
+    system(CLEAR_SCREEN);
+    printHeader("DINING PHILOSOPHERS & DEADLOCK VISUALIZER");
+
+    printf(YELLOW "Instructions:" RESET " Manually control philosophers to understand Deadlock.\n");
+    printf("Create Deadlock: Make EVERY philosopher pick up their LEFT chopstick.\n\n");
+
+    printf("      (P0)       \n");
+    printf("     /    \\     \n");
+    printf("  (P4)    (P1)   \n");
+    printf("    \\      /    \n");
+    printf("   (P3)--(P2)    \n\n");
+
+    printLine(60);
+    printf("| %-3s | %-10s | %-12s | %-15s |\n", "ID", "State", "Left Stick", "Right Stick");
+    printLine(60);
+
+    for (int i = 0; i < 5; i++)
+    {
+        int left = i;
+        int right = (i + 1) % 5;
+
+        // FIXED BUFFER SIZES TO 50 TO PREVENT OVERFLOW
+        char lStatus[50], rStatus[50];
+        char stateStr[50];
+
+        if (chopstick[left] == 1)
+            strcpy(lStatus, GREEN "Free" RESET);
+        else if (held_sticks[i] & 1)
+            strcpy(lStatus, GREEN "HELD (By You)" RESET);
+        else
+            strcpy(lStatus, RED "BUSY" RESET);
+
+        if (chopstick[right] == 1)
+            strcpy(rStatus, GREEN "Free" RESET);
+        else if (held_sticks[i] & 2)
+            strcpy(rStatus, GREEN "HELD (By You)" RESET);
+        else
+            strcpy(rStatus, RED "BUSY" RESET);
+
+        if (p_state[i] == THINKING)
+            strcpy(stateStr, "THINKING");
+        else if (p_state[i] == HUNGRY)
+            strcpy(stateStr, YELLOW "HUNGRY" RESET);
+        else
+            strcpy(stateStr, GREEN "EATING" RESET);
+
+        printf("| P%d  | %-18s | %-21s | %-24s |\n", i, stateStr, lStatus, rStatus);
+    }
+    printLine(60);
+}
+
+void runDiningPhilosophers()
+{
+    initDining();
+    int choice, p_id;
+    char msg[256] = "Welcome to the Dining Hall.";
+
+    while (1)
+    {
+        displayDiningTable();
+        printf(MAGENTA "LOG: " RESET "%s\n", msg);
+
+        printf("\n" BLUE "Select Philosopher (0-4) or 5 to Exit: " RESET);
+        p_id = getSafeInt();
+        if (p_id == 5)
+            break;
+        if (p_id < 0 || p_id > 4)
+        {
+            strcpy(msg, "Invalid Philosopher ID");
+            continue;
+        }
+
+        printf("\n" CYAN "Action for P%d:" RESET "\n", p_id);
+        printf("1. Pick Up LEFT Chopstick (%d)\n", p_id);
+        printf("2. Pick Up RIGHT Chopstick (%d)\n", (p_id + 1) % 5);
+        printf("3. Put Down BOTH (Stop Eating)\n");
+        printf("4. Cancel\n");
+        printf("Selection: ");
+        choice = getSafeInt();
+
+        int left = p_id;
+        int right = (p_id + 1) % 5;
+
+        switch (choice)
+        {
+        case 1:
+            if (chopstick[left] == 0)
+            {
+                sprintf(msg, RED "FAILURE:" RESET " Left stick is held by P%d.", (p_id + 4) % 5);
+            }
+            else if (held_sticks[p_id] & 1)
+            {
+                sprintf(msg, YELLOW "INFO:" RESET " You already hold the left stick.");
+            }
+            else
+            {
+                chopstick[left] = 0;
+                held_sticks[p_id] |= 1;
+                p_state[p_id] = HUNGRY;
+                sprintf(msg, GREEN "SUCCESS:" RESET " P%d picked up Left stick.", p_id);
+                if (held_sticks[p_id] == 3)
+                    p_state[p_id] = EATING;
+            }
+            break;
+
+        case 2:
+            if (chopstick[right] == 0)
+            {
+                sprintf(msg, RED "FAILURE:" RESET " Right stick is held by P%d.", (p_id + 1) % 5);
+            }
+            else if (held_sticks[p_id] & 2)
+            {
+                sprintf(msg, YELLOW "INFO:" RESET " You already hold the right stick.");
+            }
+            else
+            {
+                chopstick[right] = 0;
+                held_sticks[p_id] |= 2;
+                p_state[p_id] = HUNGRY;
+                sprintf(msg, GREEN "SUCCESS:" RESET " P%d picked up Right stick.", p_id);
+                if (held_sticks[p_id] == 3)
+                    p_state[p_id] = EATING;
+            }
+            break;
+
+        case 3:
+            if (held_sticks[p_id] == 0)
+            {
+                sprintf(msg, YELLOW "INFO:" RESET " P%d holds nothing.", p_id);
+            }
+            else
+            {
+                if (held_sticks[p_id] & 1)
+                    chopstick[left] = 1;
+                if (held_sticks[p_id] & 2)
+                    chopstick[right] = 1;
+                held_sticks[p_id] = 0;
+                p_state[p_id] = THINKING;
+                sprintf(msg, GREEN "SUCCESS:" RESET " P%d dropped sticks and is Thinking.", p_id);
+            }
+            break;
+        case 4:
+            strcpy(msg, "Action Cancelled.");
+            break;
+        default:
+            strcpy(msg, "Invalid Action.");
+        }
+
+        // Logic to detect DEADLOCK (All sticks held, no one eating)
+        int sticks_held = 0;
+        for (int i = 0; i < 5; i++)
+            if (chopstick[i] == 0)
+                sticks_held++;
+
+        if (sticks_held == 5)
+        {
+            bool anyone_eating = false;
+            for (int i = 0; i < 5; i++)
+                if (p_state[i] == EATING)
+                    anyone_eating = true;
+
+            if (!anyone_eating)
+            {
+                strcat(msg, RED " [DEADLOCK DETECTED! Everyone waiting]" RESET);
+            }
+        }
+    }
+}
+
+// ==========================================
+//      MAIN MENU
+// ==========================================
 
 int main()
 {
@@ -673,12 +1006,14 @@ int main()
         printHeader("ULTIMATE OS SIMULATOR");
         printf(YELLOW "1." RESET " CPU Scheduling\n");
         printf(YELLOW "2." RESET " Memory Allocation\n");
-        printf(YELLOW "3." RESET " Deadlock Avoidance\n");
-        printf(YELLOW "4." RESET " Exit\n");
+        printf(YELLOW "3." RESET " Deadlock Avoidance (Banker's)\n");
+        printf(YELLOW "4." RESET " Process Sync (Reader-Writer)\n");
+        printf(YELLOW "5." RESET " Deadlock Sim (Dining Philosophers)\n");
+        printf(YELLOW "6." RESET " Exit\n");
         printf(CYAN "\nSelect Option: " RESET);
         choice = getSafeInt();
 
-        if (choice == 4)
+        if (choice == 6)
             break;
 
         switch (choice)
@@ -749,6 +1084,12 @@ int main()
             break;
         case 3:
             runBankersAlgorithm();
+            break;
+        case 4:
+            runReaderWriter();
+            break;
+        case 5:
+            runDiningPhilosophers();
             break;
         default:
             printf(RED "Invalid Choice.\n" RESET);
