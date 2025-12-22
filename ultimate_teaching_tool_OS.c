@@ -3,15 +3,28 @@
 #include <string.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <time.h>
+#include <math.h>
 
 // --- OS Compatibility ---
 #ifdef _WIN32
 #define CLEAR_SCREEN "cls"
+#define SLEEP_MS(ms) Sleep(ms)
 #else
 #define CLEAR_SCREEN "clear"
+#define SLEEP_MS(ms) usleep((ms) * 1000)
+#endif
+
+// For the wait function
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 // --- Macros & Colors ---
+#define MAX_REQ 100
+#define MAX_FRAMES 10
 #define RESET "\033[0m"
 #define RED "\033[1;31m"
 #define GREEN "\033[1;32m"
@@ -20,6 +33,33 @@
 #define MAGENTA "\033[1;35m"
 #define CYAN "\033[1;36m"
 #define WHITE "\033[1;37m"
+
+// Global Arrays for Simulations
+int requests[MAX_REQ];
+int pages[MAX_REQ];
+int frames[MAX_FRAMES];
+
+// ==========================================
+//      VISUALIZATION DELAY
+// ==========================================
+
+// Slows down the output so the student can process the information
+void slowPrint(const char *text, int delay_ms)
+{
+    for (int i = 0; text[i] != '\0'; i++)
+    {
+        printf("%c", text[i]);
+        fflush(stdout); // Force print character immediately
+        SLEEP_MS(delay_ms);
+    }
+}
+
+// Simple pause before returning to menu
+void waitForStudent()
+{
+    printf(YELLOW "\n\n[Analysis Complete. Press ENTER to return to Menu...]" RESET);
+    getchar();
+}
 
 // ==========================================
 //      ROBUST INPUT HANDLING
@@ -659,7 +699,135 @@ void runBankersAlgorithm()
 }
 
 // ==========================================
-//      MODULE 4: READER-WRITER PROBLEM
+//      MODULE 4: DISK SCHEDULING
+// ==========================================
+
+void runDiskScheduler()
+{
+    int head, n, i, seek = 0;
+    int req[MAX_REQ];
+    printHeader("DISK SCHEDULING (FCFS/VISUALIZER)");
+
+    printf("Enter current head position: ");
+    head = getSafeInt();
+    printf("Enter number of requests: ");
+    n = getSafeInt();
+    printf("Enter the requests: ");
+    for (i = 0; i < n; i++)
+        scanf("%d", &req[i]);
+    clearBuffer();
+
+    printf("\n" YELLOW "Simulating Disk Arm Movement..." RESET "\n");
+    SLEEP_MS(800);
+
+    printf(CYAN "%d" RESET, head);
+    int curr = head;
+
+    for (i = 0; i < n; i++)
+    {
+        SLEEP_MS(1000); // Wait 1 second between each move
+        int move = abs(req[i] - curr);
+        seek += move;
+        curr = req[i];
+        printf(" --(" RED "%d" RESET ")--> " CYAN "%d" RESET, move, curr);
+        fflush(stdout);
+    }
+
+    SLEEP_MS(500);
+    printf("\n\n" GREEN "Calculation: Sum of all head displacements = %d units." RESET, seek);
+    waitForStudent();
+}
+
+// ==========================================
+//      MODULE 5: PAGE REPLACEMENT
+// ==========================================
+
+void runPageReplacement()
+{
+    int f_size, p_count, i, j, faults = 0, top = 0;
+    int f[MAX_FRAMES], p[MAX_REQ];
+
+    printHeader("VIRTUAL MEMORY: FIFO PAGE REPLACEMENT");
+    printf("Frame Count: ");
+    f_size = getSafeInt();
+    printf("Sequence Size: ");
+    p_count = getSafeInt();
+    printf("Sequence: ");
+    for (i = 0; i < p_count; i++)
+        scanf("%d", &p[i]);
+    clearBuffer();
+
+    for (i = 0; i < f_size; i++)
+        f[i] = -1; // Initialize frames as empty
+
+    printf("\nRef | Frame Contents\t\tStatus\n----|-------------------------");
+    for (i = 0; i < p_count; i++)
+    {
+        SLEEP_MS(1200); // Delay for student to predict if it's a Hit or Miss
+        bool hit = false;
+        for (j = 0; j < f_size; j++)
+            if (f[j] == p[i])
+                hit = true;
+
+        printf("\n %d  | ", p[i]);
+        if (!hit)
+        {
+            f[top] = p[i];
+            top = (top + 1) % f_size;
+            faults++;
+            for (j = 0; j < f_size; j++)
+            {
+                if (f[j] != -1)
+                    printf("[%d] ", f[j]);
+                else
+                    printf("[ ] ");
+            }
+            printf("\t" RED "MISS (Page Fault)" RESET);
+        }
+        else
+        {
+            for (j = 0; j < f_size; j++)
+            {
+                if (f[j] != -1)
+                    printf("[%d] ", f[j]);
+                else
+                    printf("[ ] ");
+            }
+            printf("\t" GREEN "HIT (Found in RAM)" RESET);
+        }
+        fflush(stdout);
+    }
+    waitForStudent();
+}
+
+// ==========================================
+//      MODULE 6: RACE CONDITION
+// ==========================================
+
+void runRaceCondition()
+{
+    printHeader("CONCURRENCY: RACE CONDITION SIMULATOR");
+    printf("Scenario: Two threads incrementing a shared variable.\n");
+    printf("Problem: Without locks, a context switch can cause lost updates.\n\n");
+
+    int shared = 100;
+    printf(BLUE "Initial Shared Variable Value: %d\n" RESET, shared);
+
+    printf(YELLOW "\n1. Thread A reads value (%d)\n" RESET, shared);
+    printf(RED "--- CONTEXT SWITCH (Thread A Interrupted) ---\n" RESET);
+    printf(CYAN "2. Thread B reads value (%d)\n" RESET, shared);
+    printf("3. Thread B increments value to 101 and writes it back.\n");
+    shared = 101;
+    printf(YELLOW "4. Thread A resumes. It still thinks the value is 100!\n" RESET);
+    printf("5. Thread A increments 100 to 101 and writes it back.\n");
+    shared = 101;
+
+    printf("\n" RED "FINAL VALUE: %d" RESET " (Should have been 102)\n", shared);
+    printf("Explanation: The update from Thread B was overwritten by Thread A.\n");
+}
+
+// ==========================================
+//      MODULE 7: READER-WRITER PROBLEM
 // ==========================================
 
 void displayRWState(int readers, int writer_active, int mutex, int wrt_sem)
@@ -802,7 +970,7 @@ void runReaderWriter()
 }
 
 // ==========================================
-//      MODULE 5: DINING PHILOSOPHERS
+//      MODULE 8: DINING PHILOSOPHERS
 // ==========================================
 
 #define THINKING 0
@@ -1003,18 +1171,19 @@ int main()
     int choice;
     while (1)
     {
+        system(CLEAR_SCREEN);
         printHeader("ULTIMATE OS SIMULATOR");
         printf(YELLOW "1." RESET " CPU Scheduling\n");
         printf(YELLOW "2." RESET " Memory Allocation\n");
         printf(YELLOW "3." RESET " Deadlock Avoidance (Banker's)\n");
-        printf(YELLOW "4." RESET " Process Sync (Reader-Writer)\n");
-        printf(YELLOW "5." RESET " Deadlock Sim (Dining Philosophers)\n");
-        printf(YELLOW "6." RESET " Exit\n");
+        printf(YELLOW "4." RESET " Disk Scheduling Visualizer\n");
+        printf(YELLOW "5." RESET " Page Replacement (Virtual Memory)\n");
+        printf(YELLOW "6." RESET " Race Condition Demo (Concurrency)\n");
+        printf(YELLOW "7." RESET " Process Sync (Reader-Writer)\n");
+        printf(YELLOW "8." RESET " Deadlock Sim (Dining Philosophers)\n");
+        printf(YELLOW "9." RESET " Exit\n");
         printf(CYAN "\nSelect Option: " RESET);
         choice = getSafeInt();
-
-        if (choice == 6)
-            break;
 
         switch (choice)
         {
@@ -1086,12 +1255,26 @@ int main()
             runBankersAlgorithm();
             break;
         case 4:
-            runReaderWriter();
+            runDiskScheduler();
             break;
         case 5:
+            runPageReplacement();
+            break;
+        case 6:
+            slowPrint(YELLOW "Initializing Race Condition Arena...\n" RESET, 50);
+            SLEEP_MS(1000);
+            runRaceCondition();
+            waitForStudent();
+            break;
+        case 7:
+            runReaderWriter();
+            break;
+        case 8:
             runDiningPhilosophers();
             break;
         default:
+            printf("Module under construction...\n");
+            SLEEP_MS(1000);
             printf(RED "Invalid Choice.\n" RESET);
         }
     }
